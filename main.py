@@ -1,3 +1,14 @@
+print("=== Début du script ===")
+
+import os
+
+token = os.getenv("DISCORD_TOKEN")
+if not token:
+    print("❌ Le token DISCORD_TOKEN est manquant.")
+    exit(1)
+else:
+    print("✅ Le token DISCORD_TOKEN est présent.")
+
 import discord
 import asyncio
 import os
