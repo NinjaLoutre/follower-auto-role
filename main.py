@@ -17,6 +17,5 @@ client = discord.Client(intents=intents)
 @client.event
 async def on_ready():
     print(f"✅ Connecté en tant que {client.user}")
-    await client.close()  # Ferme le bot juste après connexion
 
 client.run(token)
