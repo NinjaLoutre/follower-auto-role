@@ -1,6 +1,8 @@
-print("=== Début du script ===")
-
+import discord
+import asyncio
 import os
+
+print("=== Début du script ===")
 
 token = os.getenv("DISCORD_TOKEN")
 if not token:
@@ -9,24 +11,12 @@ if not token:
 else:
     print("✅ Le token DISCORD_TOKEN est présent.")
 
-import discord
-import asyncio
-import os
-
 intents = discord.Intents.default()
-intents.guilds = True
-intents.members = True
-
 client = discord.Client(intents=intents)
 
 @client.event
 async def on_ready():
     print(f"✅ Connecté en tant que {client.user}")
+    await client.close()  # Ferme le bot juste après connexion
 
-    # Exemple : boucle toutes les 10 minutes
-    while True:
-        print("🔄 Vérification fictive des followers Twitch...")
-        await asyncio.sleep(600)  # toutes les 10 minutes
-
-# Token stocké dans les variables d’environnement
-client.run(os.getenv("DISCORD_TOKEN"))
+client.run(token)
