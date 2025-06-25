@@ -6,7 +6,7 @@ import asyncio
 # === CONFIGURATION ===
 TWITCH_CLIENT_ID = "29hnvf3ru8waz788a3yqfaxyb67krw"
 TWITCH_ACCESS_TOKEN = "anz32bha4p5ojxo0klal3iq0rpkhea"
-TWITCH_USERNAME = "ninjaloutre"
+TWITCH_USERNAME = "nedile"
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = 138020178406408192  # Remplace par l’ID de ton serveur
 ROLE_NAME = "Joviaux Soyeux"
