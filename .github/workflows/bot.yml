@@ -1,28 +1,29 @@
 name: Run Discord Bot
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: '0 12 * * *'  # Tous les jours à 12h UTC
+  workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
-    env:
-      DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+    - name: Install dependencies
+      run: pip install -r requirements.txt
 
-      - name: Run the bot
-        run: python main.py
+    - name: Run python main.py
+      env:
+        DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+        TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+        TWITCH_TOKEN: ${{ secrets.TWITCH_TOKEN }}
+      run: |
+        echo "=== Début du script ==="
+        python main.py
