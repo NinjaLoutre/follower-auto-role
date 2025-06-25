@@ -1,125 +1,104 @@
 import discord
+import json
 import requests
-import os
 import asyncio
+import os
 
-# === CONFIGURATION ===
-TWITCH_CLIENT_ID = "29hnvf3ru8waz788a3yqfaxyb67krw"
-TWITCH_ACCESS_TOKEN = "anz32bha4p5ojxo0klal3iq0rpkhea"
-TWITCH_USERNAME = "nedile"
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = 138020178406408192  # Remplace par l’ID de ton serveur
+TWITCH_CLIENT_ID = os.getenv("TWITCH_CLIENT_ID")
+TWITCH_TOKEN = os.getenv("TWITCH_TOKEN")
 ROLE_NAME = "Joviaux Soyeux"
-OWNER_ID = 127513232746348544  # Ton ID Discord (pas le pseudo)
 
-# === DISCORD SETUP ===
 intents = discord.Intents.default()
+intents.guilds = True
+intents.guild_messages = True
 intents.members = True
+intents.message_content = True
 client = discord.Client(intents=intents)
 
-# === TWITCH : récupère ton ID utilisateur ===
-def get_twitch_user_id():
+def load_json(file, default):
+    if not os.path.exists(file):
+        with open(file, "w") as f:
+            json.dump(default, f)
+    with open(file, "r") as f:
+        return json.load(f)
+
+def save_json(file, data):
+    with open(file, "w") as f:
+        json.dump(data, f, indent=4)
+
+@client.event
+async def on_ready():
+    print("=== Bot démarré ===")
+    print(f"Connecté en tant que {client.user}")
+
+    await check_followers()
+
+async def check_followers():
+    print("🔄 Vérification des followers Twitch...")
+    followers_cache = load_json("followers.json", {"followers": []})
+    linked_users = load_json("linked_users.json", {})
+
     headers = {
-        "Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}",
-        "Client-Id": TWITCH_CLIENT_ID
+        "Client-ID": TWITCH_CLIENT_ID,
+        "Authorization": f"Bearer {TWITCH_TOKEN}"
     }
-    response = requests.get(f"https://api.twitch.tv/helix/users?login={TWITCH_USERNAME}", headers=headers)
-    return response.json()["data"][0]["id"]
+    user_info = requests.get("https://api.twitch.tv/helix/users", headers=headers).json()
+    user_id = user_info["data"][0]["id"]
+    url = f"https://api.twitch.tv/helix/users/follows?to_id={user_id}&first=100"
 
-# === TWITCH : récupère jusqu’à 2000 followers ===
-def get_followers(user_id, max_followers=2000):
-    followers = []
-    cursor = None
-    headers = {
-        "Authorization": f"Bearer {TWITCH_ACCESS_TOKEN}",
-        "Client-Id": TWITCH_CLIENT_ID
-    }
+    response = requests.get(url, headers=headers).json()
+    twitch_followers = [f["from_name"].lower() for f in response["data"]]
 
-    while len(followers) < max_followers:
-        params = {"to_id": user_id, "first": 100}
-        if cursor:
-            params["after"] = cursor
-        response = requests.get("https://api.twitch.tv/helix/users/follows", headers=headers, params=params)
-        data = response.json()
-        followers += [f["from_name"].lower() for f in data.get("data", [])]
-        cursor = data.get("pagination", {}).get("cursor")
-        if not cursor:
-            break
-
-    return followers
-
-# === NOTIFICATION PRIVÉE ===
-async def notify_owner(message):
-    owner = await client.fetch_user(OWNER_ID)
-    if owner:
-        try:
-            await owner.send(message)
-        except Exception as e:
-            print(f"❌ Erreur d'envoi DM : {e}")
-
-# === BOUCLE PRINCIPALE ===
-async def check_followers_loop():
-    await client.wait_until_ready()
-    guild = client.get_guild(GUILD_ID)
+    guild = discord.utils.get(client.guilds)
     if not guild:
-        print("❌ Serveur introuvable.")
+        print("❌ Serveur Discord introuvable.")
         return
 
     role = discord.utils.get(guild.roles, name=ROLE_NAME)
     if not role:
-        print(f"❌ Rôle '{ROLE_NAME}' introuvable.")
+        print("❌ Rôle introuvable sur le serveur.")
         return
 
-    user_id = get_twitch_user_id()
+    for member_id, twitch_name in linked_users.items():
+        member = guild.get_member(int(member_id))
+        if not member:
+            continue
 
-    while not client.is_closed():
-        try:
-            followers = get_followers(user_id)
-            print(f"🔄 {len(followers)} followers récupérés.")
+        has_followed = twitch_name.lower() in twitch_followers
+        has_role = role in member.roles
 
-            for member in guild.members:
-                username = member.name.lower()
-                has_role = role in member.roles
-                is_follower = username in followers
-
-                if is_follower and not has_role:
-                    await member.add_roles(role)
-                    print(f"✅ {username} a reçu le rôle.")
-                    await notify_owner(f"✅ {member.mention} a été reconnu comme follower Twitch.")
-                elif not is_follower and has_role:
-                    await member.remove_roles(role)
-                    print(f"❌ {username} a perdu le rôle.")
-                    await notify_owner(f"❌ {member.mention} ne suit plus sur Twitch. Rôle retiré.")
-
-        except Exception as e:
-            print(f"❗ Erreur dans la boucle : {e}")
-
-        await asyncio.sleep(300)  # toutes les 5 minutes
-
-@client.event
-async def on_ready():
-    print(f"🤖 Connecté en tant que {client.user}")
-    client.loop.create_task(check_followers_loop())
-
-# === SI MEMBRE REJOINT ===
-@client.event
-async def on_member_join(member):
-    if member.guild.id != GUILD_ID:
-        return
-
-    user_id = get_twitch_user_id()
-    followers = get_followers(user_id)
-
-    if member.name.lower() in followers:
-        role = discord.utils.get(member.guild.roles, name=ROLE_NAME)
-        if role:
+        if has_followed and not has_role:
             await member.add_roles(role)
-            await notify_owner(f"✅ {member.mention} a rejoint et a été reconnu comme follower Twitch.")
+            try:
+                await member.send("✅ Merci de suivre sur Twitch ! Tu as reçu le rôle **Joviaux Soyeux** sur Discord.")
+            except:
+                pass
+        elif not has_followed and has_role:
+            await member.remove_roles(role)
+            try:
+                await member.send("❌ Tu ne suis plus sur Twitch. Le rôle **Joviaux Soyeux** t’a été retiré.")
+            except:
+                pass
 
-# === LANCEMENT ===
-print("=== Lancement du bot ===")
-if not DISCORD_TOKEN:
-    print("❌ Le token DISCORD_TOKEN est manquant.")
-    exit(1)
+    followers_cache["followers"] = twitch_followers
+    save_json("followers.json", followers_cache)
+
+@client.event
+async def on_message(message):
+    if not isinstance(message.channel, discord.DMChannel):
+        return
+
+    if message.content.startswith("!linktwitch"):
+        parts = message.content.split()
+        if len(parts) != 2:
+            await message.channel.send("❌ Utilisation correcte : `!linktwitch ton_pseudo_twitch`")
+            return
+
+        twitch_name = parts[1].lower()
+        linked_users = load_json("linked_users.json", {})
+        linked_users[str(message.author.id)] = twitch_name
+        save_json("linked_users.json", linked_users)
+        await message.channel.send(f"🔗 Ton compte Twitch **{twitch_name}** est maintenant lié à ton compte Discord.")
 
 client.run(DISCORD_TOKEN)
